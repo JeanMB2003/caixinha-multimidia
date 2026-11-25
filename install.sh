@@ -110,6 +110,7 @@ MQTT_PASS='${MQTT_PASS//\'/}'
 SUN_USER='$SUN_USER'
 SUN_PASS='${SUN_PASS//\'/}'
 EOF
+  umask 022  # o umask 077 vazava para o pct exec e deixava tudo dentro do CT legivel so pelo root
 }
 
 # =====================================================================================
@@ -138,9 +139,13 @@ instala_proxmox() {
 
   # placa de som (saida local)
   declare -a AOPT=(); local n id desc
-  while read -r n id desc; do AOPT+=("$n" "$id - $desc"); done < <(awk -F'[][]' '/^ *[0-9]+ \[/ {gsub(/ /,"",$1); gsub(/ +$/,"",$2); split($3,a," - "); print $1, $2, a[2]}' /proc/asound/cards 2>/dev/null)
-  SOM=""; for f in /proc/asound/card*/usbid; do [ -e "$f" ] && { SOM=$(echo "$f" | sed -E 's#.*/card([0-9]+)/.*#\1#'); break; }; done
-  [ -z "$SOM" ] && [ ${#AOPT[@]} -gt 0 ] && SOM=${AOPT[0]}
+  # so placas com saida (pcm0p): controle remoto/microfone USB nao servem de alto-falante
+  while read -r n id desc; do [ -e /proc/asound/card$n/pcm0p ] && AOPT+=("$n" "$id - $desc"); done < <(awk -F'[][]' '/^ *[0-9]+ \[/ {gsub(/ /,"",$1); gsub(/ +$/,"",$2); split($3,a," - "); print $1, $2, a[2]}' /proc/asound/cards 2>/dev/null)
+  # padrao: placa USB com saida; sem ela, nenhuma (HDMI da GPU raramente e o alto-falante; escolha no Avancado)
+  SOM=""; for f in /proc/asound/card*/usbid; do
+    n=$(echo "$f" | sed -E 's#.*/card([0-9]+)/.*#\1#')
+    [ -e /proc/asound/card$n/pcm0p ] && { SOM=$n; break; }
+  done
 
   BT=0; ls /sys/class/bluetooth/hci* >/dev/null 2>&1 && BT=1
 
@@ -264,6 +269,7 @@ Home Assistant (MQTT): ${MQTT_HOST:-nao}"
 #  MODO ALVO: instala a central nesta maquina (dentro do CT ou num Debian/Ubuntu comum)
 # =====================================================================================
 instala_alvo() {
+  umask 022
   local RESP=$CONF/instalar.env
   if [ -r "$RESP" ]; then . "$RESP"
   else
