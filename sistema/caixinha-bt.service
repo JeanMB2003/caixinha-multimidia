@@ -1,0 +1,14 @@
+[Unit]
+Description=caixinha-multimidia - audio, Bluetooth e Home Assistant (MQTT)
+After=network-online.target caixinha-pipewire-pulse.service
+Wants=network-online.target caixinha-pipewire-pulse.service
+
+[Service]
+User=som
+EnvironmentFile=/etc/caixinha/ambiente
+ExecStart=/usr/bin/python3 /opt/caixinha-multimidia/app/caixinha_bt.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

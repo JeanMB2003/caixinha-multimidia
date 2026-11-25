@@ -1,0 +1,5 @@
+#!/bin/sh
+# abrir-pagina <inicio|painel|bluetooth|ajustes|radio|ytmusic>  -> troca a tela da central
+runuser -u som -- env XDG_RUNTIME_DIR=/run/som DBUS_SESSION_BUS_ADDRESS="$(cat /run/som/sessao-dbus 2>/dev/null)" \
+  gdbus call --session --dest br.casa.multimidia --object-path /br/casa/multimidia \
+  --method org.gtk.Actions.Activate abrir "[<'$1'>]" "{}" >/dev/null

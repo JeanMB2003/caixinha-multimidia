@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""udev-inject - entrega um evento de hotplug (formato libudev) aos programas DENTRO do container.
+
+Dentro de um LXC nao roda udevd, entao libinput/KWin/Weston nunca ficam sabendo quando um
+teclado/mouse/controle aparece ou some. Este script recebe as propriedades do dispositivo
+(KEY=VALUE por linha, em stdin; precisa de ACTION, DEVPATH, SUBSYSTEM, SEQNUM) e as envia no
+grupo multicast "udev" do netlink, igual o systemd-udevd faria.
+"""
+import socket, struct, sys
+
+def murmur2(data: bytes, seed: int = 0) -> int:
+    m, r = 0x5bd1e995, 24
+    h = (seed ^ len(data)) & 0xffffffff
+    n = len(data) // 4
+    for i in range(n):
+        k = struct.unpack_from("<I", data, i * 4)[0]
+        k = (k * m) & 0xffffffff; k ^= k >> r; k = (k * m) & 0xffffffff
+        h = (h * m) & 0xffffffff; h ^= k
+    rest = data[n * 4:]
+    if len(rest) == 3: h ^= rest[2] << 16
+    if len(rest) >= 2: h ^= rest[1] << 8
+    if len(rest) >= 1:
+        h ^= rest[0]; h = (h * m) & 0xffffffff
+    h ^= h >> 13; h = (h * m) & 0xffffffff; h ^= h >> 15
+    return h
+
+props = {}
+for line in sys.stdin.read().splitlines():
+    if "=" in line:
+        k, v = line.split("=", 1)
+        props[k.strip()] = v
+for req in ("ACTION", "DEVPATH", "SUBSYSTEM", "SEQNUM"):
+    if req not in props:
+        sys.exit(f"faltando {req}")
+
+body = b"".join(f"{k}={v}".encode() + b"\0" for k, v in props.items())
+sub_hash = murmur2(props["SUBSYSTEM"].encode())
+dt = props.get("DEVTYPE")
+dt_hash = murmur2(dt.encode()) if dt else 0
+hdr_size = 40
+header = b"libudev\0" + struct.pack(">I", 0xfeedcafe) + struct.pack("=III", hdr_size, hdr_size, len(body)) \
+         + struct.pack(">IIII", sub_hash, dt_hash, 0, 0)
+s = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 15)  # NETLINK_KOBJECT_UEVENT
+s.bind((0, 0))
+s.sendto(header + body, (0, 2))  # grupo 2 = "udev"
+print(f"{props['ACTION']} {props.get('DEVNAME', props['DEVPATH'])} enviado")

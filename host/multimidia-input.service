@@ -1,0 +1,10 @@
+[Unit]
+Description=caixinha-multimidia - entrada virtual do Moonlight para o CT (/run/multimidia/input)
+After=systemd-udevd.service
+Before=pve-guests.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/multimidia-input sync
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target

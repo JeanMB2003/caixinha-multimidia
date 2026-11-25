@@ -1,0 +1,19 @@
+#!/bin/bash
+# Vigia do som: se o PipeWire comecar a dar erro na placa (snd_pcm_start: Broken pipe / File descriptor
+# in bad state, comum em placas USB), reinicia o som. No maximo 1x por minuto e 5x por hora.
+# Depois reinicia o Sunshine (o stream voltaria sem som) e fecha o Shortwave (ficaria travado).
+fonte() { journalctl -u caixinha-pipewire -f -n 0 -o cat; }
+reinicia() {
+  systemctl restart caixinha-pipewire caixinha-wireplumber caixinha-pipewire-pulse
+  sleep 3; pkill -x sunshine; pkill -9 -x shortwave
+}
+log() { logger -t caixinha-som "$*"; }
+ultimo=0; historico=()
+fonte | while IFS= read -r linha; do
+  case "$linha" in *snd_pcm_start*|*"File descriptor in bad state"*) ;; *) continue ;; esac
+  agora=$(date +%s); (( agora - ultimo < 60 )) && continue
+  recentes=0; for t in "${historico[@]}"; do (( agora - t < 3600 )) && recentes=$((recentes + 1)); done
+  if (( recentes >= 5 )); then log "erro na placa, ja reiniciei 5x na ultima hora ($linha)"; ultimo=$agora; continue; fi
+  log "erro na placa ($linha): reiniciando o som"; sleep 2; reinicia
+  ultimo=$(date +%s); historico+=("$ultimo")
+done

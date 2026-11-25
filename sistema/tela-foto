@@ -1,0 +1,3 @@
+#!/bin/sh
+# tela-foto [arquivo]  -> captura a tela virtual (para conferir sem Moonlight)
+runuser -u som -- env XDG_RUNTIME_DIR=/run/som WAYLAND_DISPLAY=wayland-1 grim "${1:-/tmp/tela.png}"

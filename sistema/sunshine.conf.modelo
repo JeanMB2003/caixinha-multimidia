@@ -1,0 +1,10 @@
+sunshine_name = @NOME@
+capture = wlr
+@ENCODER@
+output_name = 0
+file_apps = /etc/caixinha/apps.json
+credentials_file = /var/lib/caixinha/sunshine_state.json
+file_state = /var/lib/caixinha/sunshine_state.json
+log_path = /var/log/caixinha/sunshine.log
+min_log_level = info
+origin_web_ui_allowed = lan

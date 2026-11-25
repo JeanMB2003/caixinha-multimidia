@@ -1,0 +1,16 @@
+# Container sem udev: declara a placa de som escolhida na instalacao como saida fixa.
+context.objects = [
+  { factory = adapter
+    args = {
+      factory.name     = api.alsa.pcm.sink
+      node.name        = "caixinha_local"
+      node.description = "@DESC@"
+      media.class      = "Audio/Sink"
+      api.alsa.path    = "@HW@"
+      audio.rate       = 48000
+      audio.channels   = 2
+      priority.session = 1500
+      node.pause-on-idle = false
+    }
+  }
+]

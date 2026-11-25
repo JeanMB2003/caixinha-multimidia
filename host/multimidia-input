@@ -1,0 +1,43 @@
+#!/bin/bash
+# multimidia-input <add|remove> <eventN>   (chamado pelo udev; tambem: multimidia-input sync)
+# Proxmox + LXC sem privilegios: o teclado/mouse/toque VIRTUAIS que o Sunshine da caixinha cria
+# (/dev/uinput) aparecem no host. Este script cria o no deles em /run/multimidia/input (tmpfs COM
+# dev; o /run do host e nodev), que o CT monta como /dev/input, e avisa o CT do hotplug
+# (udev-inject), senao o sway/libinput la dentro nao ve o Moonlight.
+# Configuracao: /etc/caixinha-multimidia.conf  (CT=<id>  DONO=<uid>:<gid do grupo input no host>)
+CONF=/etc/caixinha-multimidia.conf
+[ -r $CONF ] && . $CONF
+CT=${CT:-}
+DONO=${DONO:-100000:100996}
+DIR=/run/multimidia/input
+LOG=/var/log/multimidia-input.log
+[ -n "$CT" ] || exit 0
+mountpoint -q /run/multimidia || { mkdir -p /run/multimidia; mount -t tmpfs -o mode=0755,size=1m tmpfs /run/multimidia; }
+mkdir -p $DIR
+
+no() { # cria o no de /dev/input/$1 se for um dispositivo virtual
+  local ev=$1 sys mm; sys=$(readlink -f /sys/class/input/$ev) || return 1
+  case $sys in /sys/devices/virtual/*) ;; *) return 1;; esac
+  mm=$(cat /sys/class/input/$ev/dev) || return 1
+  [ -e $DIR/$ev ] && [ "$(stat -c '%t:%T' $DIR/$ev)" = "$(printf '%x:%x' ${mm%:*} ${mm#*:})" ] && return 0
+  rm -f $DIR/$ev; mknod -m 660 $DIR/$ev c ${mm%:*} ${mm#*:}; chown $DONO $DIR/$ev
+}
+avisa() { # entrega o evento ao CT sem nunca segurar o udev
+  pct status $CT 2>/dev/null | grep -q running || return 0
+  timeout 5 systemd-run --no-block --no-ask-password --collect --quiet \
+    /usr/local/bin/multimidia-input aviso "$1" "$2" >/dev/null 2>&1 || true
+}
+
+case $1 in
+  add)    no "$2" && avisa add "$2" ;;
+  remove) [ -e $DIR/$2 ] && { rm -f $DIR/$2; avisa remove "$2"; } ;;
+  sync)   for s in /sys/class/input/event*; do [ -e "$s" ] && no "$(basename $s)"; done
+          for f in $DIR/event*; do [ -e "$f" ] && [ ! -e /sys/class/input/$(basename $f) ] && rm -f "$f"; done ;;
+  aviso)  ACAO=$2; EV=$3; sleep 0.3
+          SYS=$(readlink -f /sys/class/input/$EV 2>/dev/null); DP=${SYS#/sys}
+          { if [ "$ACAO" = add ] && [ -n "$DP" ]; then udevadm info -q property -p "$DP" | grep -vE '^(ACTION|SEQNUM)='
+            else printf 'DEVPATH=%s\nSUBSYSTEM=input\nDEVNAME=/dev/input/%s\n' "${DP:-/devices/virtual/input/x/$EV}" "$EV"; fi
+            echo "ACTION=$ACAO"; echo "SEQNUM=$(date +%s%N | cut -c1-15)"; } \
+          | pct exec $CT -- /usr/local/bin/udev-inject >> $LOG 2>&1 ;;
+esac
+exit 0

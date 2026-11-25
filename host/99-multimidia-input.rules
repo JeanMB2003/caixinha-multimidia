@@ -1,0 +1,3 @@
+# teclado/mouse/toque/controle virtuais (Sunshine do CT da caixinha) -> /run/multimidia/input
+SUBSYSTEM=="input", KERNEL=="event*", ACTION=="add", DEVPATH=="/devices/virtual/*", RUN+="/usr/local/bin/multimidia-input add %k"
+SUBSYSTEM=="input", KERNEL=="event*", ACTION=="remove", RUN+="/usr/local/bin/multimidia-input remove %k"

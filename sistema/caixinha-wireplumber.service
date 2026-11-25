@@ -1,0 +1,16 @@
+[Unit]
+Description=caixinha-multimidia - wireplumber (som da central)
+After=network.target caixinha-pipewire.service
+BindsTo=caixinha-pipewire.service
+
+[Service]
+User=som
+EnvironmentFile=/etc/caixinha/ambiente
+RuntimeDirectory=som
+RuntimeDirectoryPreserve=yes
+ExecStart=/usr/bin/wireplumber
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

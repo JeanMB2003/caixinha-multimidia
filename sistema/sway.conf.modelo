@@ -1,0 +1,34 @@
+# caixinha-multimidia: tela virtual @RES@, sem monitor. Vista pelo Moonlight.
+output HEADLESS-1 mode @RES@@60Hz position 0 0 bg #0a2a6b solid_color
+default_border none
+default_floating_border none
+titlebar_border_thickness 0
+titlebar_padding 1
+font pango:Noto Sans 1
+focus_follows_mouse no
+focus_on_window_activation focus
+seat * hide_cursor 3000
+input type:touch map_to_output HEADLESS-1
+input type:tablet_tool map_to_output HEADLESS-1
+# mouse do Moonlight: sem aceleracao (o cliente ja manda a posicao certa)
+input type:pointer accel_profile flat
+input type:pointer pointer_accel 0
+input type:pointer map_to_output HEADLESS-1
+
+# cada app no seu "espaco" ocupando a tela toda (acima da barra de baixo, que e layer-shell)
+workspace_layout default
+assign [app_id="^br.casa.multimidia$"] workspace inicio
+assign [app_id="^de.haeckerfelix.Shortwave$"] workspace radio
+assign [app_id="(?i)youtube-music|com.github.th_ch.youtube_music"] workspace ytmusic
+for_window [app_id=".*"] border none
+for_window [class=".*"] border none
+
+exec dbus-update-activation-environment WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP=sway
+# celular por Bluetooth: titulo/artista e controles (AVRCP) viram MPRIS na central
+exec_always sh -c "pkill -x mpris-proxy; exec mpris-proxy >> /var/log/caixinha/mpris-proxy.log 2>&1"
+exec sh -c "echo $DBUS_SESSION_BUS_ADDRESS > /run/som/sessao-dbus"
+# chaveiro sem senha (apps como o YT Music guardam o login nele)
+exec sh -c "printf '' | gnome-keyring-daemon --replace --unlock --components=secrets >/dev/null"
+exec env LD_PRELOAD=@LAYERSHELL@ /usr/bin/python3 /opt/caixinha-multimidia/app/multimidia.py >> /var/log/caixinha/ui.log 2>&1
+exec_always /usr/local/bin/multimidia-sunshine
+workspace inicio

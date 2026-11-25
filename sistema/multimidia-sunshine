@@ -1,0 +1,14 @@
+#!/bin/sh
+# multimidia-sunshine        -> (re)inicia o Sunshine supervisionado dentro da sessao sway
+# multimidia-sunshine laco   -> (interno) mantem o Sunshine vivo: se cair/travar, volta em 3 s
+LOG=/var/log/caixinha/sunshine.log
+if [ "$1" != laco ]; then
+  pkill -f "multimidia-sunshine laco" 2>/dev/null; pkill -x sunshine 2>/dev/null; sleep 1
+  setsid /usr/local/bin/multimidia-sunshine laco >/dev/null 2>&1 &
+  exit 0
+fi
+while true; do
+  sunshine /etc/caixinha/sunshine.conf >> $LOG 2>&1
+  echo "[caixinha] sunshine saiu (codigo $?), reiniciando em 3 s" >> $LOG
+  sleep 3
+done

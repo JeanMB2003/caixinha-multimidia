@@ -1,0 +1,21 @@
+# MPD da caixinha (o Home Assistant / Music Assistant pode tocar por aqui)
+music_directory     "/var/lib/mpd/music"
+playlist_directory  "/var/lib/mpd/playlists"
+db_file             "/var/lib/mpd/tag_cache"
+state_file          "/var/lib/mpd/state"
+sticker_file        "/var/lib/mpd/sticker.sql"
+user                "som"
+bind_to_address     "0.0.0.0"
+port                "6600"
+auto_update         "no"
+zeroconf_enabled    "yes"
+zeroconf_name       "@NOME@"
+input {
+    plugin "curl"
+}
+audio_output {
+    type        "pulse"
+    name        "@NOME@"
+    server      "unix:/run/som/pulse/native"
+    mixer_type  "software"
+}

@@ -1,0 +1,3 @@
+#!/bin/sh
+# swaymsg na sessao da central (socket mais novo)
+exec runuser -u som -- env XDG_RUNTIME_DIR=/run/som SWAYSOCK="$(ls -t /run/som/sway-ipc.*.sock | head -1)" swaymsg "$@"

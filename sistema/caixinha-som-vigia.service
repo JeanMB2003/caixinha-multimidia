@@ -1,0 +1,11 @@
+[Unit]
+Description=caixinha-multimidia - vigia do som (reinicia o PipeWire se a placa de som travar)
+After=caixinha-pipewire.service
+
+[Service]
+ExecStart=/usr/local/bin/caixinha-som-vigia
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
