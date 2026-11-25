@@ -15,7 +15,7 @@
 set -o pipefail
 REPO=${CAIXINHA_REPO:-JeanMB2003/caixinha-multimidia}
 REF=${CAIXINHA_REF:-main}
-TARBALL="https://codeload.github.com/$REPO/tar.gz/$REF"
+TARBALL=${CAIXINHA_TARBALL:-"https://codeload.github.com/$REPO/tar.gz/$REF"}  # ou um .tar.gz local (testes)
 DEST=/opt/caixinha-multimidia
 CONF=/etc/caixinha
 TITULO="caixinha-multimidia"
@@ -59,7 +59,8 @@ baixa_fontes() { # baixa o repositorio inteiro (programas + arquivos de sistema)
   local alvo=$1
   command -v curl >/dev/null || { apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null; }
   rm -rf "$alvo.novo"; mkdir -p "$alvo.novo"
-  curl -fsSL "$TARBALL" | tar xz -C "$alvo.novo" --strip-components=1 || erro "nao consegui baixar $TARBALL"
+  if [ -f "$TARBALL" ]; then tar xzf "$TARBALL" -C "$alvo.novo" --strip-components=1 || erro "pacote $TARBALL invalido"
+  else curl -fsSL "$TARBALL" | tar xz -C "$alvo.novo" --strip-components=1 || erro "nao consegui baixar $TARBALL"; fi
   rm -rf "$alvo"; mv "$alvo.novo" "$alvo"
 }
 
@@ -251,7 +252,8 @@ Home Assistant (MQTT): ${MQTT_HOST:-nao}"
   pct exec "$CTID" -- mkdir -p "$CONF"
   pct push "$CTID" /tmp/caixinha-respostas.env "$CONF/instalar.env" --perms 600; rm -f /tmp/caixinha-respostas.env
   pct push "$CTID" /tmp/caixinha-fontes/install.sh /root/caixinha-instalar.sh --perms 755
-  pct exec "$CTID" -- env CAIXINHA_REPO="$REPO" CAIXINHA_REF="$REF" TERM=dumb bash /root/caixinha-instalar.sh --alvo \
+  local TB_CT=""; [ -f "$TARBALL" ] && { pct push "$CTID" "$TARBALL" /root/caixinha-fontes.tar.gz; TB_CT=/root/caixinha-fontes.tar.gz; }
+  pct exec "$CTID" -- env CAIXINHA_REPO="$REPO" CAIXINHA_REF="$REF" ${TB_CT:+CAIXINHA_TARBALL=$TB_CT} TERM=dumb bash /root/caixinha-instalar.sh --alvo \
     || erro "a instalacao dentro do container falhou (veja $LOG dentro do CT $CTID)"
   local IP; IP=$(pct exec "$CTID" -- sh -c "ip -4 -br a show eth0 | awk '{print \$3}' | cut -d/ -f1")
   rm -rf /tmp/caixinha-fontes
