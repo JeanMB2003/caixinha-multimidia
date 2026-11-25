@@ -319,7 +319,7 @@ instala_alvo() {
   msg "Sunshine (servidor do Moonlight)"
   if ! command -v sunshine >/dev/null; then
     local SUF; case "$ID-$VERSION_ID" in debian-13) SUF="debiantrixie_$ARQ";; ubuntu-*) SUF="ubuntu${VERSION_ID}_$ARQ";; *) SUF="debiantrixie_$ARQ";; esac
-    local URL; URL=$(curl -fsSL https://api.github.com/repos/LizardByte/Sunshine/releases/latest | grep -o "https://[^\"]*${SUF}\.deb" | head -1)
+    local URL; URL=$(curl -fsSL https://api.github.com/repos/LizardByte/Sunshine/releases/latest | grep -o "https://[^\"]*${SUF}\.deb" | sed -n 1p)
     [ -n "$URL" ] || erro "nao achei o .deb do Sunshine para $SUF"
     curl -fsSL -o /tmp/sunshine.deb "$URL" && apt-get install -y -q /tmp/sunshine.deb >> $LOG 2>&1 || erro "instalacao do Sunshine falhou"
     rm -f /tmp/sunshine.deb
@@ -327,7 +327,7 @@ instala_alvo() {
 
   if [ "$YTM" = 1 ] && ! command -v youtube-music >/dev/null; then
     msg "YT Music"
-    local U; U=$(curl -fsSL https://api.github.com/repos/pear-devs/pear-desktop/releases/latest | grep -o "https://[^\"]*_${ARQ}\.deb" | head -1)
+    local U; U=$(curl -fsSL https://api.github.com/repos/pear-devs/pear-desktop/releases/latest | grep -o "https://[^\"]*_${ARQ}\.deb" | sed -n 1p)
     if [ -n "$U" ] && curl -fsSL -o /tmp/ytm.deb "$U" && apt-get install -y -q /tmp/ytm.deb >> $LOG 2>&1; then ok
     else aviso "YT Music nao instalado (sem pacote para $ARQ?)"; fi
     rm -f /tmp/ytm.deb
@@ -335,7 +335,8 @@ instala_alvo() {
 
   configura
   [ -r "$RESP" ] && rm -f "$RESP"  # respostas (com senhas) ja aplicadas
-  [ "$MODO" = local ] && final "$(hostname -I | awk '{print $1}')" "esta maquina"
+  if [ "${MODO:-}" = local ]; then final "$(hostname -I | awk '{print $1}')" "esta maquina"; fi
+  return 0  # dentro do CT o host e quem mostra o final; sem isso a funcao saia com 1 e o host acusava falha
 }
 
 # ------------------------------------------------------------------ configuracao (instalar e atualizar)
