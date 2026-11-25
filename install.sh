@@ -27,24 +27,28 @@ ok()   { echo "  ${C_OK}ok${C_0} $*"; }
 aviso(){ echo "  ${C_AV}aviso:${C_0} $*"; echo "$(date '+%F %T') AVISO $*" >> $LOG; }
 erro() { echo "${C_ER}ERRO:${C_0} $*" >&2; echo "$(date '+%F %T') ERRO $*" >> $LOG; exit 1; }
 [ "$(id -u)" = 0 ] || erro "rode como root"
+umask 022  # os servicos rodam como 'som': nada pode nascer legivel so pelo root (umask 077 herdado quebrava tudo)
 
 # ------------------------------------------------------------------ dialogos (whiptail)
 WT=$(command -v whiptail || true)
+# Cancelar num dialogo: os dialogos rodam dentro de $(...), entao um 'exit' sairia so do subshell
+trap 'echo; echo "${C_AV}cancelado${C_0}"; exit 1' USR1
+cancela() { kill -USR1 $$; exit 1; }
 AUTO=${CAIXINHA_AUTO:-0}   # CAIXINHA_AUTO=1: sem perguntas, tudo no padrao recomendado (sem MQTT)
 menu() { # menu "pergunta" tag desc ...
   [ "$AUTO" = 1 ] && { echo "$2"; return 0; }
   local q=$1; shift
-  if [ -n "$WT" ]; then whiptail --title "$TITULO" --menu "$q" 20 78 10 "$@" 3>&1 1>&2 2>&3 || exit 1
+  if [ -n "$WT" ]; then whiptail --title "$TITULO" --menu "$q" 20 78 10 "$@" 3>&1 1>&2 2>&3 || cancela
   else echo "$q" >&2; local i=0 t; for t in "$@"; do i=$((i+1)); [ $((i%2)) = 1 ] && echo "  $t" >&2; done; read -rp "> " t; echo "$t"; fi
 }
 entrada() { # entrada "pergunta" "padrao"
   [ "$AUTO" = 1 ] && { echo "$2"; return 0; }
-  if [ -n "$WT" ]; then whiptail --title "$TITULO" --inputbox "$1" 11 78 "$2" 3>&1 1>&2 2>&3 || exit 1
+  if [ -n "$WT" ]; then whiptail --title "$TITULO" --inputbox "$1" 11 78 "$2" 3>&1 1>&2 2>&3 || cancela
   else read -rp "$1 [$2]: " r; echo "${r:-$2}"; fi
 }
 senha() { # senha "pergunta"
   [ "$AUTO" = 1 ] && { echo ""; return 0; }
-  if [ -n "$WT" ]; then whiptail --title "$TITULO" --passwordbox "$1" 10 78 3>&1 1>&2 2>&3 || exit 1
+  if [ -n "$WT" ]; then whiptail --title "$TITULO" --passwordbox "$1" 10 78 3>&1 1>&2 2>&3 || cancela
   else read -rsp "$1: " r; echo >&2; echo "$r"; fi
 }
 simnao() { # simnao "pergunta" [s|n]
@@ -240,13 +244,22 @@ Home Assistant (MQTT): ${MQTT_HOST:-nao}"
   ok
 
   msg "Pecas no host (entrada virtual do Moonlight)"
+  # caixinhas que ja existem neste host continuam recebendo a entrada (lista de CTs)
+  local LISTA="" ANT="" DONO_ANT="" c
+  if [ -r /etc/caixinha-multimidia.conf ]; then
+    ANT=$(sed -n 's/^CT=//p' /etc/caixinha-multimidia.conf | tr -d "\"'")
+    DONO_ANT=$(sed -n 's/^DONO=//p' /etc/caixinha-multimidia.conf | tr -d "\"'")
+  elif [ -f /usr/local/bin/multimidia-input ]; then  # versao antiga, com o CT fixo no script
+    ANT=$(sed -n 's/^CT=\${MULTIMIDIA_CT:-\([0-9]*\)}.*/\1/p' /usr/local/bin/multimidia-input)
+  fi
+  for c in $ANT; do [ "$c" != "$CTID" ] && [ -e /etc/pve/lxc/$c.conf ] && LISTA="$LISTA $c"; done
+  LISTA="${LISTA# } $CTID"; LISTA=${LISTA# }
+  [ -n "${LISTA% *}" ] && [ "$LISTA" != "$CTID" ] && aviso "este host ja tem caixinha(s) (CT ${LISTA% $CTID}); todas recebem o teclado/mouse/toque do Moonlight"
+  [ -n "$DONO_ANT" ] && [ "$DONO_ANT" != "100000:$((100000 + GI))" ] && aviso "grupo input diferente entre as caixinhas ($DONO_ANT x 100000:$((100000 + GI)))"
   install -m 755 /tmp/caixinha-fontes/host/multimidia-input /usr/local/bin/multimidia-input
   install -m 644 /tmp/caixinha-fontes/host/99-multimidia-input.rules /etc/udev/rules.d/99-multimidia-input.rules
   install -m 644 /tmp/caixinha-fontes/host/multimidia-input.service /etc/systemd/system/multimidia-input.service
-  if [ -r /etc/caixinha-multimidia.conf ] && ! grep -qx "CT=$CTID" /etc/caixinha-multimidia.conf; then
-    aviso "este host ja tinha outra caixinha ($(grep ^CT= /etc/caixinha-multimidia.conf)); a entrada do Moonlight passa a ir para o CT $CTID"
-  fi
-  printf 'CT=%s\nDONO=100000:%s\n' "$CTID" "$((100000 + GI))" > /etc/caixinha-multimidia.conf
+  printf 'CT="%s"\nDONO=100000:%s\n' "$LISTA" "$((100000 + GI))" > /etc/caixinha-multimidia.conf
   udevadm control --reload; systemctl daemon-reload; systemctl enable multimidia-input >/dev/null 2>&1
   systemctl restart multimidia-input; ok
 
@@ -292,7 +305,7 @@ instala_alvo() {
   export DEBIAN_FRONTEND=noninteractive
   if [ "$ID" = debian ]; then  # driver de video da Intel com codificacao fica no non-free
     for f in /etc/apt/sources.list.d/*.sources; do
-      [ -e "$f" ] && sed -i -E '/^Components:/ { /non-free( |$)/! s/$/ non-free non-free-firmware/; /contrib/! s/^Components: main/Components: main contrib/ }' "$f"
+      [ -e "$f" ] && sed -i -E '/^Components:/ { / non-free( |$)/! s/$/ non-free/; /non-free-firmware/! s/$/ non-free-firmware/; / contrib( |$)/! s/^Components: main/Components: main contrib/ }' "$f"
     done
     [ -f /etc/apt/sources.list ] && sed -i -E '/^deb .* main/ { /non-free/! s/ main/ main contrib non-free non-free-firmware/ }' /etc/apt/sources.list
   fi
@@ -454,7 +467,9 @@ final() { # final <ip> <onde>
   echo "              Ao parear, o Moonlight mostra um PIN de 4 numeros: digite em"
   echo "              https://$IP:47990  (usuario: $SUN_USER  senha: $SUN_PASS)"
   [ -n "${MQTT_HOST:-}" ] && echo "              ou no Home Assistant, no campo 'PIN do Moonlight' do dispositivo '$NOME'."
-  echo "  Bluetooth:  na tela, botao Bluetooth da barra -> Visivel -> parear o celular (codigo aparece na tela)."
+  [ "${BT:-0}" = 1 ] && echo "  Bluetooth:  na tela, botao Bluetooth da barra -> Visivel -> parear o celular (codigo aparece na tela)."
+  [ -z "${SOM_HW:-}" ] && echo "  Som:        sem placa local - o audio sai pelo proprio Moonlight$([ "${BT:-0}" = 1 ] && echo " ou por uma caixa Bluetooth")."
+  [ "${MPD:-0}" = 1 ] && echo "  MPD:        no HA, Adicionar integracao -> Music Player Daemon (MPD), host $IP porta 6600 (sem senha)."
   echo "  Configs:    $CONF/  (MQTT: mqtt.env)    Atualizar: bash $DEST/install.sh --atualizar"
   echo
 }
@@ -463,7 +478,7 @@ atualizar() {
   [ -d $DEST ] || erro "a caixinha nao esta instalada aqui"
   msg "Atualizando os programas ($REPO@$REF)"
   baixa_fontes $DEST; ok
-  . <(sed -n 's/^NOME=/NOME=/p' $CONF/caixinha.env)
+  NOME=$(sed -n 's/^NOME=//p' $CONF/caixinha.env | head -n1 | tr -d "\"'"); NOME=${NOME:-Caixinha}  # sem 'source': o nome pode ter espaco
   RES=$(sed -n 's/^output HEADLESS-1 mode \([0-9x]*\)@.*/\1/p' $CONF/sway.conf); RES=${RES:-1280x720}
   EM_LXC=0; [ -e /etc/tmpfiles.d/udev-host.conf ] && EM_LXC=1
   BT=0; grep -q mnt/dbus-host $CONF/ambiente 2>/dev/null && BT=1; systemctl is-enabled bluetooth >/dev/null 2>&1 && BT=1

@@ -54,3 +54,10 @@ Moonlight para dentro do container sem privilégios.
 - NVIDIA dentro do LXC não é configurada pelo instalador (o vídeo fica na CPU); instalação direta numa máquina
   com o driver NVIDIA usa NVENC.
 - Numa máquina com desktop, o instalador desliga o PipeWire da sessão do usuário (a caixinha usa o seu próprio).
+- Sem placa de som (nem Bluetooth) a caixinha funciona igual: o áudio sai pelo próprio Moonlight.
+- MPD no Home Assistant: *Adicionar integração → Music Player Daemon (MPD)*, host = IP da caixinha, porta 6600.
+  Para tocar pelo Music Assistant, ative o provedor *Home Assistant MediaPlayers* e marque esse player.
+- Várias caixinhas (ou outro Sunshine) no mesmo Proxmox: o teclado/mouse/toque virtuais do Moonlight vão
+  para todas as caixinhas do host — o kernel não diz qual Sunshine criou cada dispositivo.
+- Moonlight com erro 409 ou que não conecta depois de parear: exclua o PC no Moonlight, adicione o IP de novo
+  e pareie (no Sunshine, *Clientes → Desparear todos* limpa os pareamentos antigos).
